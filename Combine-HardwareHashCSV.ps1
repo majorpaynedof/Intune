@@ -360,9 +360,8 @@ try {
     # Export combined data to new CSV file
     Write-ColorOutput "Writing combined CSV file..." -Type "Info"
 
-    # Use UTF8 with BOM encoding (required for Windows Autopilot)
-    $utf8BOM = New-Object System.Text.UTF8Encoding $true
-    $allData | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
+    # Convert ArrayList to array and export (ArrayList may not pipe correctly to Export-Csv)
+    $allData.ToArray() | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
 
     # Verify output file was created successfully
     if (Test-Path $outputPath) {
