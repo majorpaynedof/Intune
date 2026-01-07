@@ -341,10 +341,18 @@ try {
     Write-ColorOutput "Total records collected: $($allData.Count)" -Type "Info"
     Write-ColorOutput "DEBUG: Inspecting collected data..." -Type "Info"
     Write-ColorOutput "DEBUG: First item type: $($allData[0].GetType().FullName)" -Type "Info"
-    Write-ColorOutput "DEBUG: First item serial: $($allData[0].'Device Serial Number')" -Type "Info"
-    if ($allData.Count -gt 1) {
-        Write-ColorOutput "DEBUG: Second item serial: $($allData[1].'Device Serial Number')" -Type "Info"
-        Write-ColorOutput "DEBUG: Last item serial: $($allData[-1].'Device Serial Number')" -Type "Info"
+
+    # Get the serial number property name (could vary between CSV files)
+    $serialProp = $allData[0].PSObject.Properties.Name | Where-Object { $_ -like "*Serial Number*" } | Select-Object -First 1
+    if ($serialProp) {
+        Write-ColorOutput "DEBUG: First item serial: $($allData[0].$serialProp)" -Type "Info"
+        if ($allData.Count -gt 1) {
+            Write-ColorOutput "DEBUG: Second item serial: $($allData[1].$serialProp)" -Type "Info"
+            Write-ColorOutput "DEBUG: Last item serial: $($allData[-1].$serialProp)" -Type "Info"
+        }
+    }
+    else {
+        Write-ColorOutput "DEBUG: Available properties: $($allData[0].PSObject.Properties.Name -join ', ')" -Type "Info"
     }
 
     # Remove duplicates if requested
