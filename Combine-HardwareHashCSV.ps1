@@ -300,11 +300,11 @@ try {
                 $header = $csvContent[0].PSObject.Properties.Name
             }
 
-            # Add records using array addition
-            if ($csvContent.Count -gt 0) {
-                $allData += $csvContent
-                Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
+            # Add each record individually (not as array) to avoid nesting
+            foreach ($record in $csvContent) {
+                $allData += $record
             }
+            Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
             $processedCount++
 
             # Track successful file processing for report
