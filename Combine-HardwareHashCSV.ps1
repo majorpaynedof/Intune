@@ -282,7 +282,7 @@ try {
 
     # Combine CSV files
     Write-ColorOutput "Combining CSV files..." -Type "Info"
-    $allData = @()
+    $allData = [System.Collections.ArrayList]::new()
     $header = $null
     $processedCount = 0
 
@@ -294,15 +294,17 @@ try {
             $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
 
             Write-ColorOutput "  DEBUG: Imported $($csvContent.Count) records from $($file.Name)" -Type "Info"
+            Write-ColorOutput "  DEBUG: First record type: $($csvContent[0].GetType().FullName)" -Type "Info"
 
             # Store header from first valid file
             if ($null -eq $header -and $csvContent.Count -gt 0) {
                 $header = $csvContent[0].PSObject.Properties.Name
+                Write-ColorOutput "  DEBUG: Header columns: $($header -join ', ')" -Type "Info"
             }
 
-            # Add each record individually (not as array) to avoid nesting
+            # Add each record individually to ArrayList
             foreach ($record in $csvContent) {
-                $allData += $record
+                [void]$allData.Add($record)
             }
             Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
             $processedCount++
@@ -375,8 +377,17 @@ try {
     Write-ColorOutput "DEBUG: About to export $($allData.Count) total records" -Type "Info"
     Write-ColorOutput "DEBUG: Data type: $($allData.GetType().FullName)" -Type "Info"
 
-    # Export the array directly
-    $allData | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8 -Force
+    if ($allData.Count -gt 0) {
+        Write-ColorOutput "DEBUG: Sample - First record type: $($allData[0].GetType().FullName)" -Type "Info"
+        if ($allData.Count -ge 2) {
+            Write-ColorOutput "DEBUG: Sample - Second record type: $($allData[1].GetType().FullName)" -Type "Info"
+        }
+    }
+
+    # Convert ArrayList to array and export
+    $arrayToExport = $allData.ToArray()
+    Write-ColorOutput "DEBUG: Converted to array, count: $($arrayToExport.Count)" -Type "Info"
+    $arrayToExport | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8 -Force
 
     # Verify the file was written correctly
     Write-ColorOutput "DEBUG: Verifying output file..." -Type "Info"
