@@ -386,6 +386,41 @@ try {
 
     Write-ColorOutput "Total records collected: $totalRecordCount" -Type "Info"
 
+    # Add/Update Group Tag to "Standard" for all records
+    Write-ColorOutput "Setting Group Tag to 'Standard' for all records..." -Type "Info"
+    $groupTagUpdated = 0
+    $groupTagAdded = 0
+    $standardHBGReplaced = 0
+
+    foreach ($record in $allData) {
+        $hasGroupTag = $null -ne ($record.PSObject.Properties.Name | Where-Object { $_ -eq "Group Tag" })
+
+        if ($hasGroupTag) {
+            # Check if it's "Standard-HBG" and replace it
+            if ($record.'Group Tag' -eq "Standard-HBG") {
+                $record.'Group Tag' = "Standard"
+                $standardHBGReplaced++
+            } elseif ($record.'Group Tag' -ne "Standard") {
+                $record.'Group Tag' = "Standard"
+                $groupTagUpdated++
+            }
+        } else {
+            # Add Group Tag property with value "Standard"
+            $record | Add-Member -MemberType NoteProperty -Name "Group Tag" -Value "Standard" -Force
+            $groupTagAdded++
+        }
+    }
+
+    if ($groupTagAdded -gt 0) {
+        Write-ColorOutput "  Added 'Group Tag' column to $groupTagAdded record(s)" -Type "Success"
+    }
+    if ($groupTagUpdated -gt 0) {
+        Write-ColorOutput "  Updated Group Tag to 'Standard' for $groupTagUpdated record(s)" -Type "Success"
+    }
+    if ($standardHBGReplaced -gt 0) {
+        Write-ColorOutput "  Replaced 'Standard-HBG' with 'Standard' for $standardHBGReplaced record(s)" -Type "Success"
+    }
+
     # Remove duplicates if requested
     if ($RemoveDuplicates) {
         Write-ColorOutput "Removing duplicate entries..." -Type "Info"
