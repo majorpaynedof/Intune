@@ -282,7 +282,7 @@ try {
 
     # Combine CSV files
     Write-ColorOutput "Combining CSV files..." -Type "Info"
-    $allData = [System.Collections.ArrayList]::new()
+    $allData = @()
     $header = $null
     $processedCount = 0
 
@@ -293,14 +293,17 @@ try {
             # Import CSV content (force array to handle single-row CSVs)
             $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
 
+            Write-ColorOutput "  DEBUG: Imported $($csvContent.Count) records from $($file.Name)" -Type "Info"
+
             # Store header from first valid file
             if ($null -eq $header -and $csvContent.Count -gt 0) {
                 $header = $csvContent[0].PSObject.Properties.Name
             }
 
-            # Add each record individually to avoid nesting issues
-            foreach ($record in $csvContent) {
-                [void]$allData.Add($record)
+            # Add records using array addition
+            if ($csvContent.Count -gt 0) {
+                $allData += $csvContent
+                Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
             }
             $processedCount++
 
@@ -359,9 +362,16 @@ try {
 
     # Export combined data to new CSV file
     Write-ColorOutput "Writing combined CSV file..." -Type "Info"
+    Write-ColorOutput "DEBUG: About to export $($allData.Count) total records" -Type "Info"
+    Write-ColorOutput "DEBUG: Data type: $($allData.GetType().FullName)" -Type "Info"
 
-    # Convert ArrayList to array and export (ArrayList may not pipe correctly to Export-Csv)
-    $allData.ToArray() | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
+    # Export the array directly
+    $allData | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8 -Force
+
+    # Verify the file was written correctly
+    Write-ColorOutput "DEBUG: Verifying output file..." -Type "Info"
+    $verifyContent = Import-Csv -Path $outputPath
+    Write-ColorOutput "DEBUG: Output file contains $($verifyContent.Count) records" -Type "Info"
 
     # Verify output file was created successfully
     if (Test-Path $outputPath) {
