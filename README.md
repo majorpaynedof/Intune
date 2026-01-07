@@ -11,6 +11,8 @@ This script combines multiple hardware hash CSV files without corrupting the ori
 - **Safe Processing**: Validates CSV structure before combining
 - **Automatic Backup**: Creates timestamped backups of existing output files
 - **Duplicate Removal**: Optional removal of duplicate device entries
+- **Detailed Reporting**: Automatically generates comprehensive processing reports
+- **Empty File Detection**: Identifies and reports empty or header-only CSV files
 - **Error Handling**: Robust error handling with detailed logging
 - **Flexible Input**: Supports recursive directory scanning
 - **Proper Encoding**: Uses UTF-8 with BOM encoding (required for Windows Autopilot)
@@ -84,6 +86,7 @@ Combine files and remove duplicate entries based on device serial number:
 | `Recursive` | Switch | No | False | Search subdirectories recursively |
 | `RemoveDuplicates` | Switch | No | False | Remove duplicate entries |
 | `CreateBackup` | Boolean | No | True | Backup existing output file |
+| `GenerateReport` | Boolean | No | True | Generate detailed processing report |
 
 ## CSV Format
 
@@ -109,6 +112,88 @@ Device Serial Number,Windows Product ID,Hardware Hash
 4. **Combining**: Merges all valid CSV files into one
 5. **Deduplication**: Optionally removes duplicate entries
 6. **Export**: Writes combined data with proper UTF-8 BOM encoding
+7. **Reporting**: Generates detailed processing report (optional)
+
+## Automatic Reporting
+
+The script automatically generates a comprehensive processing report (enabled by default) that includes:
+
+### Report Contents
+
+- **Summary Statistics**: Total files found, successfully combined, total records, output file size
+- **Successfully Combined Files**: Lists each file with record count and file size
+- **Empty Files (0 bytes)**: Files that are completely empty
+- **Empty Data Files**: Files with header only, no data rows
+- **Invalid Format Files**: Files that don't match expected hardware hash format
+- **Validation Errors**: Files that failed validation checks
+- **Processing Errors**: Files that encountered errors during processing
+
+### Report Location
+
+Reports are automatically saved as timestamped text files:
+```
+<OutputFile>.report_YYYYMMDD_HHMMSS.txt
+```
+
+Example:
+```
+Combined-HardwareHash.csv.report_20260107_143022.txt
+```
+
+### Sample Report
+
+```
+================================================================================
+           Hardware Hash CSV Combine Report
+================================================================================
+Generated: 2026-01-07 14:30:22
+Script Version: 1.0
+
+SUMMARY
+========================================
+Total CSV Files Found: 10
+Successfully Combined: 8
+Total Records in Output: 156
+Output File: C:\HardwareHashes\Combined-HardwareHash.csv
+Output File Size: 245.67 KB
+
+PROCESSING STATISTICS
+========================================
+Valid Files Processed: 8
+Empty Files (0 bytes): 1
+Empty Data Files (header only): 1
+Invalid Format Files: 0
+Files with Validation Errors: 0
+Files with Processing Errors: 0
+
+SUCCESSFULLY COMBINED FILES (8)
+========================================
+  ✓ Device1.csv
+      Records: 25
+      Size: 32.15 KB
+      Path: C:\HardwareHashes\Device1.csv
+  ...
+
+EMPTY FILES - 0 BYTES (1)
+========================================
+  ✗ EmptyFile.csv
+      Reason: File is empty (0 bytes)
+      Path: C:\HardwareHashes\EmptyFile.csv
+
+EMPTY DATA FILES - HEADER ONLY (1)
+========================================
+  ✗ NoData.csv
+      Reason: File contains only header, no data rows
+      Path: C:\HardwareHashes\NoData.csv
+```
+
+### Disabling Reports
+
+To disable automatic report generation:
+
+```powershell
+.\Combine-HardwareHashCSV.ps1 -GenerateReport $false
+```
 
 ## Safety Features
 
