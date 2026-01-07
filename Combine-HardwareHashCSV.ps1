@@ -291,11 +291,46 @@ try {
         try {
             Write-ColorOutput "Processing: $($file.Name)" -Type "Info"
 
-            # Import CSV content (force array to handle single-row CSVs)
-            $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
+            # Read raw CSV text first to check for malformed headers
+            $rawLines = Get-Content -Path $file.FullName -Encoding UTF8
+
+            if ($rawLines.Count -lt 2) {
+                Write-ColorOutput "  Skipping $($file.Name) - not enough data" -Type "Warning"
+                continue
+            }
+
+            # Check if CSV has quoted/malformed header
+            $needsRepair = $false
+            if ($rawLines[0] -match '^".*,.*"$' -or $rawLines[1] -match '^".*,.*,.*"$') {
+                Write-ColorOutput "  Detected malformed CSV format - repairing..." -Type "Warning"
+                $needsRepair = $true
+            }
+
+            if ($needsRepair) {
+                # Repair the CSV by removing quotes around entire rows
+                $repairedLines = @()
+                foreach ($line in $rawLines) {
+                    # Remove surrounding quotes if the entire line is quoted
+                    if ($line -match '^"(.*)"$') {
+                        $repairedLines += $matches[1]
+                    } else {
+                        $repairedLines += $line
+                    }
+                }
+
+                # Write repaired CSV to temp file and import it
+                $tempFile = [System.IO.Path]::GetTempFileName()
+                $repairedLines | Set-Content -Path $tempFile -Encoding UTF8
+                $csvContent = @(Import-Csv -Path $tempFile -Encoding UTF8)
+                Remove-Item -Path $tempFile -Force
+                Write-ColorOutput "  Repaired and imported $($csvContent.Count) records" -Type "Success"
+            } else {
+                # Import CSV normally
+                $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
+            }
 
             if ($csvContent.Count -eq 0) {
-                Write-ColorOutput "  Skipping $($file.Name) - no data" -Type "Warning"
+                Write-ColorOutput "  Skipping $($file.Name) - no data after import" -Type "Warning"
                 continue
             }
 
@@ -306,15 +341,9 @@ try {
                 $headerProperties = $csvContent[0].PSObject.Properties.Name
                 Write-ColorOutput "  DEBUG: Header properties count: $($headerProperties.Count)" -Type "Info"
                 Write-ColorOutput "  DEBUG: Header properties: $($headerProperties -join ' | ')" -Type "Info"
-
-                # Check if headers are malformed (all as one property)
-                if ($headerProperties.Count -eq 1 -and $headerProperties[0] -like "*,*") {
-                    Write-ColorOutput "  WARNING: Detected malformed CSV header (all columns as single property)" -Type "Warning"
-                    Write-ColorOutput "  This may indicate CSV files need to be regenerated" -Type "Warning"
-                }
             }
 
-            # Add records directly to collection (simpler approach, no cloning)
+            # Add records directly to collection
             foreach ($record in $csvContent) {
                 [void]$allData.Add($record)
             }
