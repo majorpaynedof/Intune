@@ -280,10 +280,10 @@ try {
         Write-ColorOutput "Backup created successfully" -Type "Success"
     }
 
-    # Combine CSV files using raw text approach to avoid PowerShell object issues
+    # Combine CSV files by explicitly cloning objects to avoid nesting
     Write-ColorOutput "Combining CSV files..." -Type "Info"
-    $allLines = [System.Collections.ArrayList]::new()
-    $headerLine = $null
+    $allData = [System.Collections.ArrayList]::new()
+    $headerProperties = $null
     $processedCount = 0
     $totalRecordCount = 0
 
@@ -291,48 +291,46 @@ try {
         try {
             Write-ColorOutput "Processing: $($file.Name)" -Type "Info"
 
-            # Read all lines from the CSV file
-            $lines = Get-Content -Path $file.FullName -Encoding UTF8
+            # Import CSV content (force array to handle single-row CSVs)
+            $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
 
-            if ($lines.Count -lt 2) {
-                Write-ColorOutput "  Skipping $($file.Name) - not enough data" -Type "Warning"
+            if ($csvContent.Count -eq 0) {
+                Write-ColorOutput "  Skipping $($file.Name) - no data" -Type "Warning"
                 continue
             }
 
-            Write-ColorOutput "  DEBUG: Read $($lines.Count) lines from $($file.Name)" -Type "Info"
+            Write-ColorOutput "  DEBUG: Imported $($csvContent.Count) records from $($file.Name)" -Type "Info"
 
-            # First file: store the header
-            if ($null -eq $headerLine) {
-                $headerLine = $lines[0]
-                [void]$allLines.Add($headerLine)
-                Write-ColorOutput "  DEBUG: Header line: $headerLine" -Type "Info"
+            # First file: capture header property names
+            if ($null -eq $headerProperties) {
+                $headerProperties = $csvContent[0].PSObject.Properties.Name
+                Write-ColorOutput "  DEBUG: Header properties: $($headerProperties -join ', ')" -Type "Info"
             }
 
-            # Add data rows (skip header row at index 0)
-            $dataRowCount = 0
-            for ($i = 1; $i -lt $lines.Count; $i++) {
-                if (![string]::IsNullOrWhiteSpace($lines[$i])) {
-                    [void]$allLines.Add($lines[$i])
-                    $dataRowCount++
+            # Explicitly clone each record as a new PSCustomObject to avoid reference issues
+            foreach ($record in $csvContent) {
+                $newRecord = [PSCustomObject]@{}
+                foreach ($prop in $headerProperties) {
+                    $newRecord | Add-Member -MemberType NoteProperty -Name $prop -Value $record.$prop
                 }
+                [void]$allData.Add($newRecord)
             }
 
-            Write-ColorOutput "  DEBUG: Added $dataRowCount data rows from $($file.Name)" -Type "Info"
-            Write-ColorOutput "  DEBUG: Total lines in collection now: $($allLines.Count)" -Type "Info"
+            Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
 
-            $totalRecordCount += $dataRowCount
+            $totalRecordCount += $csvContent.Count
             $processedCount++
 
             # Track successful file processing for report
             $successInfo = [PSCustomObject]@{
                 FileName = $file.Name
                 FilePath = $file.FullName
-                RecordCount = $dataRowCount
+                RecordCount = $csvContent.Count
                 FileSize = [math]::Round((Get-Item $file.FullName).Length / 1KB, 2)
             }
             [void]$reportData.SuccessfulFiles.Add($successInfo)
 
-            Write-ColorOutput "  Added $dataRowCount record(s) from $($file.Name)" -Type "Success"
+            Write-ColorOutput "  Added $($csvContent.Count) record(s) from $($file.Name)" -Type "Success"
         }
         catch {
             Write-ColorOutput "Error processing $($file.Name): $_" -Type "Error"
@@ -355,42 +353,60 @@ try {
     }
 
     Write-ColorOutput "Total records collected: $totalRecordCount" -Type "Info"
-    Write-ColorOutput "Total lines (including header): $($allLines.Count)" -Type "Info"
 
     # Remove duplicates if requested
     if ($RemoveDuplicates) {
         Write-ColorOutput "Removing duplicate entries..." -Type "Info"
-        $originalLineCount = $allLines.Count
+        $originalCount = $allData.Count
 
-        # Keep header, remove duplicate data lines
-        $header = $allLines[0]
-        $uniqueDataLines = $allLines | Select-Object -Skip 1 | Select-Object -Unique
+        # Find the serial number property
+        $serialNumberProperty = $headerProperties | Where-Object {
+            $_ -like "*Serial*Number*"
+        } | Select-Object -First 1
 
-        # Rebuild with header + unique lines
-        $allLines = [System.Collections.ArrayList]::new()
-        [void]$allLines.Add($header)
-        foreach ($line in $uniqueDataLines) {
-            [void]$allLines.Add($line)
+        if ($serialNumberProperty) {
+            # Remove duplicates based on serial number
+            $uniqueData = [System.Collections.ArrayList]::new()
+            $seenSerials = @{}
+
+            foreach ($record in $allData) {
+                $serial = $record.$serialNumberProperty
+                if (-not $seenSerials.ContainsKey($serial)) {
+                    [void]$uniqueData.Add($record)
+                    $seenSerials[$serial] = $true
+                }
+            }
+
+            $allData = $uniqueData
+            $removedCount = $originalCount - $allData.Count
+            $totalRecordCount = $allData.Count
+            Write-ColorOutput "Removed $removedCount duplicate(s), $totalRecordCount unique record(s) remain" -Type "Success"
         }
-
-        $removedCount = $originalLineCount - $allLines.Count
-        Write-ColorOutput "Removed $removedCount duplicate(s), $($allLines.Count - 1) unique record(s) remain" -Type "Success"
-        $totalRecordCount = $allLines.Count - 1
+        else {
+            Write-ColorOutput "Could not identify serial number column for duplicate removal" -Type "Warning"
+        }
     }
 
-    # Write all lines directly to output file
+    # Export combined data to CSV file
     Write-ColorOutput "Writing combined CSV file..." -Type "Info"
-    Write-ColorOutput "DEBUG: About to write $($allLines.Count) total lines ($totalRecordCount data records + 1 header)" -Type "Info"
+    Write-ColorOutput "DEBUG: About to export $($allData.Count) total records" -Type "Info"
 
-    # Write all lines to file using Set-Content
-    $allLines | Set-Content -Path $outputPath -Encoding UTF8 -Force
+    # Convert ArrayList to array for Export-Csv
+    $dataToExport = $allData.ToArray()
+
+    # Export using Export-Csv with proper formatting for Intune
+    $dataToExport | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8 -Force
 
     # Verify the file was written correctly
     Write-ColorOutput "DEBUG: Verifying output file..." -Type "Info"
-    $verifyLines = Get-Content -Path $outputPath
-    Write-ColorOutput "DEBUG: Output file contains $($verifyLines.Count) lines" -Type "Info"
-    $verifyRecordCount = $verifyLines.Count - 1  # Subtract header
-    Write-ColorOutput "DEBUG: Output file contains $verifyRecordCount data records" -Type "Info"
+    $verifyData = @(Import-Csv -Path $outputPath -Encoding UTF8)
+    Write-ColorOutput "DEBUG: Output file contains $($verifyData.Count) data records" -Type "Info"
+
+    # Validate the output file has correct headers for Intune
+    if ($verifyData.Count -gt 0) {
+        $outputHeaders = $verifyData[0].PSObject.Properties.Name -join ','
+        Write-ColorOutput "DEBUG: Output file headers: $outputHeaders" -Type "Info"
+    }
 
     # Verify output file was created successfully
     if (Test-Path $outputPath) {
