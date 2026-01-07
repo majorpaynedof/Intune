@@ -370,7 +370,7 @@ try {
 
     # Verify the file was written correctly
     Write-ColorOutput "DEBUG: Verifying output file..." -Type "Info"
-    $verifyContent = Import-Csv -Path $outputPath
+    $verifyContent = @(Import-Csv -Path $outputPath)
     Write-ColorOutput "DEBUG: Output file contains $($verifyContent.Count) records" -Type "Info"
 
     # Verify output file was created successfully
