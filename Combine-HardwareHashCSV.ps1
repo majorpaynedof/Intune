@@ -339,6 +339,13 @@ try {
     }
 
     Write-ColorOutput "Total records collected: $($allData.Count)" -Type "Info"
+    Write-ColorOutput "DEBUG: Inspecting collected data..." -Type "Info"
+    Write-ColorOutput "DEBUG: First item type: $($allData[0].GetType().FullName)" -Type "Info"
+    Write-ColorOutput "DEBUG: First item serial: $($allData[0].'Device Serial Number')" -Type "Info"
+    if ($allData.Count -gt 1) {
+        Write-ColorOutput "DEBUG: Second item serial: $($allData[1].'Device Serial Number')" -Type "Info"
+        Write-ColorOutput "DEBUG: Last item serial: $($allData[-1].'Device Serial Number')" -Type "Info"
+    }
 
     # Remove duplicates if requested
     if ($RemoveDuplicates) {
