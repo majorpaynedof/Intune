@@ -32,9 +32,13 @@
     Create a backup of the output file if it already exists.
     Default: $true
 
+.PARAMETER GenerateReport
+    Automatically generate a detailed processing report.
+    Default: $true
+
 .EXAMPLE
     .\Combine-HardwareHashCSV.ps1
-    Combines all CSV files in the current directory.
+    Combines all CSV files in the current directory and generates a report.
 
 .EXAMPLE
     .\Combine-HardwareHashCSV.ps1 -SourcePath "C:\HardwareHashes" -OutputFile "Autopilot-All.csv"
@@ -65,7 +69,10 @@ param(
     [switch]$RemoveDuplicates,
 
     [Parameter(Mandatory = $false)]
-    [bool]$CreateBackup = $true
+    [bool]$CreateBackup = $true,
+
+    [Parameter(Mandatory = $false)]
+    [bool]$GenerateReport = $true
 )
 
 # Set strict mode for better error handling
@@ -94,15 +101,36 @@ function Test-HardwareHashCSV {
         [string]$FilePath
     )
 
+    $result = @{
+        IsValid = $false
+        Status = ""
+        RecordCount = 0
+        Reason = ""
+    }
+
     try {
-        # Check if file is empty
-        if ((Get-Item $FilePath).Length -eq 0) {
-            Write-ColorOutput "File is empty: $FilePath" -Type "Warning"
-            return $false
+        # Check if file is empty (0 bytes)
+        $fileSize = (Get-Item $FilePath).Length
+        if ($fileSize -eq 0) {
+            Write-ColorOutput "File is empty (0 bytes): $FilePath" -Type "Warning"
+            $result.Status = "Empty"
+            $result.Reason = "File is empty (0 bytes)"
+            return $result
+        }
+
+        # Read file content
+        $content = Get-Content -Path $FilePath
+
+        # Check if file only has header (no data rows)
+        if ($content.Count -le 1) {
+            Write-ColorOutput "File has no data rows: $FilePath" -Type "Warning"
+            $result.Status = "EmptyData"
+            $result.Reason = "File contains only header, no data rows"
+            return $result
         }
 
         # Read first line to check header
-        $firstLine = Get-Content -Path $FilePath -TotalCount 1
+        $firstLine = $content[0]
 
         # Expected headers for hardware hash CSV (Windows Autopilot format)
         $expectedHeaders = @(
@@ -122,14 +150,23 @@ function Test-HardwareHashCSV {
 
         if (-not $isValid) {
             Write-ColorOutput "File does not have expected hardware hash CSV format: $FilePath" -Type "Warning"
-            return $false
+            $result.Status = "InvalidFormat"
+            $result.Reason = "File does not have expected hardware hash CSV format"
+            return $result
         }
 
-        return $true
+        # File is valid - count data rows (excluding header)
+        $result.IsValid = $true
+        $result.Status = "Valid"
+        $result.RecordCount = $content.Count - 1
+        $result.Reason = "Valid hardware hash CSV"
+        return $result
     }
     catch {
         Write-ColorOutput "Error validating file $FilePath : $_" -Type "Error"
-        return $false
+        $result.Status = "Error"
+        $result.Reason = "Error validating file: $_"
+        return $result
     }
 }
 
@@ -174,23 +211,62 @@ try {
 
     Write-ColorOutput "Found $($csvFiles.Count) CSV file(s) to process" -Type "Info"
 
-    # Validate all CSV files
+    # Validate all CSV files and track results for reporting
     Write-ColorOutput "Validating CSV files..." -Type "Info"
     $validFiles = @()
+    $reportData = @{
+        SuccessfulFiles = [System.Collections.ArrayList]::new()
+        EmptyFiles = [System.Collections.ArrayList]::new()
+        EmptyDataFiles = [System.Collections.ArrayList]::new()
+        InvalidFormatFiles = [System.Collections.ArrayList]::new()
+        ErrorFiles = [System.Collections.ArrayList]::new()
+        ProcessingErrors = [System.Collections.ArrayList]::new()
+    }
 
     foreach ($file in $csvFiles) {
         Write-ColorOutput "Checking: $($file.Name)" -Type "Info"
-        if (Test-HardwareHashCSV -FilePath $file.FullName) {
+        $validationResult = Test-HardwareHashCSV -FilePath $file.FullName
+
+        if ($validationResult.IsValid) {
             $validFiles += $file
-            Write-ColorOutput "  Valid: $($file.Name)" -Type "Success"
+            Write-ColorOutput "  Valid: $($file.Name) - $($validationResult.RecordCount) record(s)" -Type "Success"
         }
         else {
-            Write-ColorOutput "  Skipped: $($file.Name)" -Type "Warning"
+            # Track different types of issues for reporting
+            $fileInfo = [PSCustomObject]@{
+                FileName = $file.Name
+                FilePath = $file.FullName
+                Reason = $validationResult.Reason
+            }
+
+            switch ($validationResult.Status) {
+                "Empty" { [void]$reportData.EmptyFiles.Add($fileInfo) }
+                "EmptyData" { [void]$reportData.EmptyDataFiles.Add($fileInfo) }
+                "InvalidFormat" { [void]$reportData.InvalidFormatFiles.Add($fileInfo) }
+                "Error" { [void]$reportData.ErrorFiles.Add($fileInfo) }
+            }
+
+            Write-ColorOutput "  Skipped: $($file.Name) - $($validationResult.Reason)" -Type "Warning"
         }
     }
 
     if ($validFiles.Count -eq 0) {
         Write-ColorOutput "No valid hardware hash CSV files found." -Type "Error"
+
+        # Generate report even on failure
+        if ($GenerateReport) {
+            $reportPath = "$outputPath.report_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+            $reportContent = "Hardware Hash CSV Combine Report - FAILED`n"
+            $reportContent += "=" * 70 + "`n"
+            $reportContent += "No valid CSV files found to combine.`n`n"
+            $reportContent += "Empty Files (0 bytes): $($reportData.EmptyFiles.Count)`n"
+            $reportContent += "Empty Data Files (header only): $($reportData.EmptyDataFiles.Count)`n"
+            $reportContent += "Invalid Format Files: $($reportData.InvalidFormatFiles.Count)`n"
+            $reportContent += "Files with Errors: $($reportData.ErrorFiles.Count)`n"
+            $reportContent | Out-File -FilePath $reportPath -Encoding UTF8
+            Write-ColorOutput "Report saved to: $reportPath" -Type "Info"
+        }
+
         exit 1
     }
 
@@ -228,10 +304,28 @@ try {
             }
             $processedCount++
 
+            # Track successful file processing for report
+            $successInfo = [PSCustomObject]@{
+                FileName = $file.Name
+                FilePath = $file.FullName
+                RecordCount = $csvContent.Count
+                FileSize = [math]::Round((Get-Item $file.FullName).Length / 1KB, 2)
+            }
+            [void]$reportData.SuccessfulFiles.Add($successInfo)
+
             Write-ColorOutput "  Added $($csvContent.Count) record(s) from $($file.Name)" -Type "Success"
         }
         catch {
             Write-ColorOutput "Error processing $($file.Name): $_" -Type "Error"
+
+            # Track processing error for report
+            $errorInfo = [PSCustomObject]@{
+                FileName = $file.Name
+                FilePath = $file.FullName
+                Error = $_.Exception.Message
+            }
+            [void]$reportData.ProcessingErrors.Add($errorInfo)
+
             # Continue processing other files
         }
     }
@@ -280,6 +374,145 @@ try {
         Write-ColorOutput "File Size: $([math]::Round($outputSize / 1KB, 2)) KB" -Type "Success"
         Write-ColorOutput "Files Combined: $processedCount" -Type "Success"
         Write-ColorOutput "=========================================" -Type "Info"
+
+        # Generate detailed processing report
+        if ($GenerateReport) {
+            $reportPath = "$outputPath.report_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+            Write-ColorOutput "Generating processing report..." -Type "Info"
+
+            $reportContent = @"
+================================================================================
+           Hardware Hash CSV Combine Report
+================================================================================
+Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Script Version: 1.0
+
+SUMMARY
+========================================
+Total CSV Files Found: $($csvFiles.Count)
+Successfully Combined: $($reportData.SuccessfulFiles.Count)
+Total Records in Output: $($allData.Count)
+Output File: $outputPath
+Output File Size: $([math]::Round($outputSize / 1KB, 2)) KB
+
+PROCESSING STATISTICS
+========================================
+Valid Files Processed: $($reportData.SuccessfulFiles.Count)
+Empty Files (0 bytes): $($reportData.EmptyFiles.Count)
+Empty Data Files (header only): $($reportData.EmptyDataFiles.Count)
+Invalid Format Files: $($reportData.InvalidFormatFiles.Count)
+Files with Validation Errors: $($reportData.ErrorFiles.Count)
+Files with Processing Errors: $($reportData.ProcessingErrors.Count)
+
+"@
+
+            # Add successfully combined files section
+            if ($reportData.SuccessfulFiles.Count -gt 0) {
+                $reportContent += @"
+SUCCESSFULLY COMBINED FILES ($($reportData.SuccessfulFiles.Count))
+========================================
+"@
+                foreach ($file in $reportData.SuccessfulFiles) {
+                    $reportContent += "`n  ✓ $($file.FileName)`n"
+                    $reportContent += "      Records: $($file.RecordCount)`n"
+                    $reportContent += "      Size: $($file.FileSize) KB`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add empty files section
+            if ($reportData.EmptyFiles.Count -gt 0) {
+                $reportContent += @"
+EMPTY FILES - 0 BYTES ($($reportData.EmptyFiles.Count))
+========================================
+"@
+                foreach ($file in $reportData.EmptyFiles) {
+                    $reportContent += "`n  ✗ $($file.FileName)`n"
+                    $reportContent += "      Reason: $($file.Reason)`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add empty data files section
+            if ($reportData.EmptyDataFiles.Count -gt 0) {
+                $reportContent += @"
+EMPTY DATA FILES - HEADER ONLY ($($reportData.EmptyDataFiles.Count))
+========================================
+"@
+                foreach ($file in $reportData.EmptyDataFiles) {
+                    $reportContent += "`n  ✗ $($file.FileName)`n"
+                    $reportContent += "      Reason: $($file.Reason)`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add invalid format files section
+            if ($reportData.InvalidFormatFiles.Count -gt 0) {
+                $reportContent += @"
+INVALID FORMAT FILES ($($reportData.InvalidFormatFiles.Count))
+========================================
+"@
+                foreach ($file in $reportData.InvalidFormatFiles) {
+                    $reportContent += "`n  ✗ $($file.FileName)`n"
+                    $reportContent += "      Reason: $($file.Reason)`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add validation error files section
+            if ($reportData.ErrorFiles.Count -gt 0) {
+                $reportContent += @"
+FILES WITH VALIDATION ERRORS ($($reportData.ErrorFiles.Count))
+========================================
+"@
+                foreach ($file in $reportData.ErrorFiles) {
+                    $reportContent += "`n  ✗ $($file.FileName)`n"
+                    $reportContent += "      Reason: $($file.Reason)`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add processing error files section
+            if ($reportData.ProcessingErrors.Count -gt 0) {
+                $reportContent += @"
+FILES WITH PROCESSING ERRORS ($($reportData.ProcessingErrors.Count))
+========================================
+"@
+                foreach ($file in $reportData.ProcessingErrors) {
+                    $reportContent += "`n  ✗ $($file.FileName)`n"
+                    $reportContent += "      Error: $($file.Error)`n"
+                    $reportContent += "      Path: $($file.FilePath)`n"
+                }
+                $reportContent += "`n"
+            }
+
+            # Add duplicate removal section if applicable
+            if ($RemoveDuplicates) {
+                $reportContent += @"
+DUPLICATE REMOVAL
+========================================
+Duplicate removal was enabled.
+Original record count before deduplication: (see processing log)
+Final unique record count: $($allData.Count)
+
+"@
+            }
+
+            $reportContent += @"
+================================================================================
+End of Report
+================================================================================
+"@
+
+            # Save report to file
+            $reportContent | Out-File -FilePath $reportPath -Encoding UTF8
+            Write-ColorOutput "Report saved to: $reportPath" -Type "Success"
+        }
     }
     else {
         throw "Output file was not created successfully"
