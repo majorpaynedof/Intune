@@ -214,8 +214,8 @@ try {
         try {
             Write-ColorOutput "Processing: $($file.Name)" -Type "Info"
 
-            # Import CSV content
-            $csvContent = Import-Csv -Path $file.FullName -Encoding UTF8
+            # Import CSV content (force array to handle single-row CSVs)
+            $csvContent = @(Import-Csv -Path $file.FullName -Encoding UTF8)
 
             # Store header from first valid file
             if ($null -eq $header -and $csvContent.Count -gt 0) {
