@@ -304,16 +304,19 @@ try {
             # First file: capture header property names
             if ($null -eq $headerProperties) {
                 $headerProperties = $csvContent[0].PSObject.Properties.Name
-                Write-ColorOutput "  DEBUG: Header properties: $($headerProperties -join ', ')" -Type "Info"
+                Write-ColorOutput "  DEBUG: Header properties count: $($headerProperties.Count)" -Type "Info"
+                Write-ColorOutput "  DEBUG: Header properties: $($headerProperties -join ' | ')" -Type "Info"
+
+                # Check if headers are malformed (all as one property)
+                if ($headerProperties.Count -eq 1 -and $headerProperties[0] -like "*,*") {
+                    Write-ColorOutput "  WARNING: Detected malformed CSV header (all columns as single property)" -Type "Warning"
+                    Write-ColorOutput "  This may indicate CSV files need to be regenerated" -Type "Warning"
+                }
             }
 
-            # Explicitly clone each record as a new PSCustomObject to avoid reference issues
+            # Add records directly to collection (simpler approach, no cloning)
             foreach ($record in $csvContent) {
-                $newRecord = [PSCustomObject]@{}
-                foreach ($prop in $headerProperties) {
-                    $newRecord | Add-Member -MemberType NoteProperty -Name $prop -Value $record.$prop
-                }
-                [void]$allData.Add($newRecord)
+                [void]$allData.Add($record)
             }
 
             Write-ColorOutput "  DEBUG: Total records in collection now: $($allData.Count)" -Type "Info"
