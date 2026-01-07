@@ -206,7 +206,7 @@ try {
 
     # Combine CSV files
     Write-ColorOutput "Combining CSV files..." -Type "Info"
-    $allData = @()
+    $allData = [System.Collections.ArrayList]::new()
     $header = $null
     $processedCount = 0
 
@@ -222,8 +222,10 @@ try {
                 $header = $csvContent[0].PSObject.Properties.Name
             }
 
-            # Add data to collection
-            $allData += $csvContent
+            # Add each record individually to avoid nesting issues
+            foreach ($record in $csvContent) {
+                [void]$allData.Add($record)
+            }
             $processedCount++
 
             Write-ColorOutput "  Added $($csvContent.Count) record(s) from $($file.Name)" -Type "Success"
