@@ -413,10 +413,10 @@ SUCCESSFULLY COMBINED FILES ($($reportData.SuccessfulFiles.Count))
 ========================================
 "@
                 foreach ($file in $reportData.SuccessfulFiles) {
-                    $reportContent += "`n  ✓ $($file.FileName)`n"
-                    $reportContent += "      Records: $($file.RecordCount)`n"
-                    $reportContent += "      Size: $($file.FileSize) KB`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [OK] $($file.FileName)`n"
+                    $reportContent += "       Records: $($file.RecordCount)`n"
+                    $reportContent += "       Size: $($file.FileSize) KB`n"
+                    $reportContent += "       Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }
@@ -428,9 +428,9 @@ EMPTY FILES - 0 BYTES ($($reportData.EmptyFiles.Count))
 ========================================
 "@
                 foreach ($file in $reportData.EmptyFiles) {
-                    $reportContent += "`n  ✗ $($file.FileName)`n"
-                    $reportContent += "      Reason: $($file.Reason)`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [SKIP] $($file.FileName)`n"
+                    $reportContent += "         Reason: $($file.Reason)`n"
+                    $reportContent += "         Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }
@@ -442,9 +442,9 @@ EMPTY DATA FILES - HEADER ONLY ($($reportData.EmptyDataFiles.Count))
 ========================================
 "@
                 foreach ($file in $reportData.EmptyDataFiles) {
-                    $reportContent += "`n  ✗ $($file.FileName)`n"
-                    $reportContent += "      Reason: $($file.Reason)`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [SKIP] $($file.FileName)`n"
+                    $reportContent += "         Reason: $($file.Reason)`n"
+                    $reportContent += "         Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }
@@ -456,9 +456,9 @@ INVALID FORMAT FILES ($($reportData.InvalidFormatFiles.Count))
 ========================================
 "@
                 foreach ($file in $reportData.InvalidFormatFiles) {
-                    $reportContent += "`n  ✗ $($file.FileName)`n"
-                    $reportContent += "      Reason: $($file.Reason)`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [SKIP] $($file.FileName)`n"
+                    $reportContent += "         Reason: $($file.Reason)`n"
+                    $reportContent += "         Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }
@@ -470,9 +470,9 @@ FILES WITH VALIDATION ERRORS ($($reportData.ErrorFiles.Count))
 ========================================
 "@
                 foreach ($file in $reportData.ErrorFiles) {
-                    $reportContent += "`n  ✗ $($file.FileName)`n"
-                    $reportContent += "      Reason: $($file.Reason)`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [SKIP] $($file.FileName)`n"
+                    $reportContent += "         Reason: $($file.Reason)`n"
+                    $reportContent += "         Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }
@@ -484,9 +484,9 @@ FILES WITH PROCESSING ERRORS ($($reportData.ProcessingErrors.Count))
 ========================================
 "@
                 foreach ($file in $reportData.ProcessingErrors) {
-                    $reportContent += "`n  ✗ $($file.FileName)`n"
-                    $reportContent += "      Error: $($file.Error)`n"
-                    $reportContent += "      Path: $($file.FilePath)`n"
+                    $reportContent += "`n  [ERROR] $($file.FileName)`n"
+                    $reportContent += "          Error: $($file.Error)`n"
+                    $reportContent += "          Path: $($file.FilePath)`n"
                 }
                 $reportContent += "`n"
             }

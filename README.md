@@ -168,23 +168,23 @@ Files with Processing Errors: 0
 
 SUCCESSFULLY COMBINED FILES (8)
 ========================================
-  ✓ Device1.csv
-      Records: 25
-      Size: 32.15 KB
-      Path: C:\HardwareHashes\Device1.csv
+  [OK] Device1.csv
+       Records: 25
+       Size: 32.15 KB
+       Path: C:\HardwareHashes\Device1.csv
   ...
 
 EMPTY FILES - 0 BYTES (1)
 ========================================
-  ✗ EmptyFile.csv
-      Reason: File is empty (0 bytes)
-      Path: C:\HardwareHashes\EmptyFile.csv
+  [SKIP] EmptyFile.csv
+         Reason: File is empty (0 bytes)
+         Path: C:\HardwareHashes\EmptyFile.csv
 
 EMPTY DATA FILES - HEADER ONLY (1)
 ========================================
-  ✗ NoData.csv
-      Reason: File contains only header, no data rows
-      Path: C:\HardwareHashes\NoData.csv
+  [SKIP] NoData.csv
+         Reason: File contains only header, no data rows
+         Path: C:\HardwareHashes\NoData.csv
 ```
 
 ### Disabling Reports
