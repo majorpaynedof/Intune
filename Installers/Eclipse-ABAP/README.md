@@ -8,8 +8,8 @@ Download these files and place them in the `Files\` directory before packaging:
 
 | File | Source | Notes |
 |------|--------|-------|
-| `eclipse-jee-2024-12-R-win32-x86_64.zip` | [eclipse.org/downloads](https://www.eclipse.org/downloads/packages/) | Eclipse IDE for Enterprise Java Developers (x64) |
-| `OpenJDK17U-jdk_x64_windows_hotspot_17.0.13.11.msi` | [adoptium.net](https://adoptium.net/) | Eclipse Temurin JDK 17 LTS (MSI installer) |
+| `eclipse-jee-2024-09-R-win32-x86_64.zip` | [eclipse.org/downloads](https://www.eclipse.org/downloads/packages/) | Eclipse IDE for Enterprise Java Developers 2024-09 (x64) |
+| `OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi` | [adoptium.net](https://adoptium.net/) | Eclipse Temurin JDK 21.0.9 LTS (MSI installer) |
 
 > **Note:** Update the filenames in `Deploy-Application.ps1` variables `$eclipseZipFileName` and `$jdkMsiFileName` if your downloaded versions differ.
 
@@ -33,7 +33,7 @@ Eclipse-ABAP/
 
 ## What Gets Installed
 
-1. **Eclipse Temurin JDK 17** - to `C:\Program Files\Eclipse Adoptium\jdk-17`
+1. **Eclipse Temurin JDK 21.0.9** - to `C:\Program Files\Eclipse Adoptium\jdk-21`
 2. **Eclipse IDE for Enterprise Java** - to `C:\Program Files\Eclipse\eclipse-abap`
 3. **SAP ABAP Development Tools (ADT)** - installed as Eclipse plugin via p2 director
 4. **Start Menu & Desktop shortcuts** - pointing to Eclipse with default ABAP workspace

@@ -6,8 +6,8 @@
     This script is designed for deployment via Microsoft Intune / SCCM using PSADT.
 
     Pre-requisites (place in the Files\ directory before deployment):
-      - Eclipse IDE ZIP archive (e.g., eclipse-jee-2024-12-R-win32-x86_64.zip)
-      - AdoptOpenJDK / Eclipse Temurin JDK MSI (e.g., OpenJDK17U-jdk_x64_windows_hotspot_17.0.x.msi)
+      - Eclipse IDE ZIP archive (e.g., eclipse-jee-2024-09-R-win32-x86_64.zip)
+      - AdoptOpenJDK / Eclipse Temurin JDK MSI (e.g., OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi)
 
     The ABAP Development Tools (ADT) plugin is installed automatically from the SAP update site
     after Eclipse is extracted.
@@ -48,7 +48,7 @@ Try {
     ##*===============================================
     [String]$appVendor       = 'Eclipse Foundation / SAP'
     [String]$appName         = 'Eclipse IDE with ABAP Development Tools'
-    [String]$appVersion      = '2024-12'
+    [String]$appVersion      = '2024-09'
     [String]$appArch         = 'x64'
     [String]$appLang         = 'EN'
     [String]$appRevision     = '01'
@@ -63,11 +63,11 @@ Try {
     # Installation paths
     [String]$eclipseInstallDir  = "$env:ProgramFiles\Eclipse\eclipse-abap"
     [String]$eclipseWorkspace   = "$env:PUBLIC\Documents\Eclipse-ABAP-Workspace"
-    [String]$jdkInstallDir      = "$env:ProgramFiles\Eclipse Adoptium\jdk-17"
+    [String]$jdkInstallDir      = "$env:ProgramFiles\Eclipse Adoptium\jdk-21"
 
     # Source file names (must exist in Files\ directory)
-    [String]$eclipseZipFileName = 'eclipse-jee-2024-12-R-win32-x86_64.zip'
-    [String]$jdkMsiFileName     = 'OpenJDK17U-jdk_x64_windows_hotspot_17.0.13.11.msi'
+    [String]$eclipseZipFileName = 'eclipse-jee-2024-09-R-win32-x86_64.zip'
+    [String]$jdkMsiFileName     = 'OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi'
 
     # SAP ABAP Development Tools update site URL
     [String]$adtUpdateSite      = 'https://tools.hana.ondemand.com/latest'
@@ -251,8 +251,8 @@ Try {
     ##* INSTALLATION
     ##*===============================================
 
-        ## ---- Step 1: Install JDK (Eclipse Temurin / AdoptOpenJDK 17) ----
-        Show-InstallationProgress -StatusMessage "Installing Eclipse Temurin JDK 17..."
+        ## ---- Step 1: Install JDK (Eclipse Temurin / AdoptOpenJDK 21) ----
+        Show-InstallationProgress -StatusMessage "Installing Eclipse Temurin JDK 21..."
         Write-Host "--- Step 1/4: Installing JDK ---"
 
         $jdkExitCode = Execute-MSI -Action 'Install' -Path $jdkMsiFileName -Parameters "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"$jdkInstallDir`""
