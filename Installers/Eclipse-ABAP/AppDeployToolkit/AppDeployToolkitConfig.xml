@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    PSAppDeployToolkit Configuration File
+    Application: Eclipse IDE with SAP ABAP Development Tools (ADT)
+-->
+<AppDeployToolkit_Config>
+    <Toolkit_Options>
+        <!-- Toolkit log directory (logs will be written here) -->
+        <Toolkit_LogPath>$envWinDir\Logs\Software</Toolkit_LogPath>
+        <!-- Toolkit temp working directory -->
+        <Toolkit_TempPath>$envTemp</Toolkit_TempPath>
+        <!-- Toolkit file compression option -->
+        <Toolkit_CompressLogs>true</Toolkit_CompressLogs>
+        <!-- Require admin rights -->
+        <Toolkit_RequireAdmin>true</Toolkit_RequireAdmin>
+    </Toolkit_Options>
+
+    <UI_Options>
+        <!-- Installation UI language -->
+        <UI_Language>EN</UI_Language>
+        <!-- Application name shown in dialog prompts -->
+        <UI_AppName>Eclipse IDE with ABAP Development Tools</UI_AppName>
+        <!-- Close applications countdown timer (seconds) -->
+        <UI_CloseAppsCountdown>60</UI_CloseAppsCountdown>
+        <!-- Defer limit (number of times user can defer) -->
+        <UI_DeferLimit>3</UI_DeferLimit>
+        <!-- Show balloon notifications -->
+        <UI_BalloonNotifications>true</UI_BalloonNotifications>
+    </UI_Options>
+
+    <MSI_Options>
+        <!-- Default MSI install parameters -->
+        <MSI_InstallParams>/qn /norestart</MSI_InstallParams>
+        <!-- Default MSI uninstall parameters -->
+        <MSI_UninstallParams>/qn /norestart</MSI_UninstallParams>
+        <!-- Default MSI logging options -->
+        <MSI_LoggingOptions>/l*v</MSI_LoggingOptions>
+        <!-- MSI log path -->
+        <MSI_LogPath>$envWinDir\Logs\Software</MSI_LogPath>
+    </MSI_Options>
+</AppDeployToolkit_Config>
