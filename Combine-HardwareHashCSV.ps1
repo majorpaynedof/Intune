@@ -200,12 +200,28 @@ try {
         $searchParams.Add("Recurse", $true)
     }
 
-    $csvFiles = @(Get-ChildItem @searchParams | Where-Object {
+    Write-ColorOutput "Searching for *.csv files in: $sourcePath" -Type "Info"
+
+    # First, show all CSV files found (before filtering)
+    $allCsvFiles = @(Get-ChildItem @searchParams)
+    Write-ColorOutput "DEBUG: Found $($allCsvFiles.Count) total CSV files" -Type "Info"
+    if ($allCsvFiles.Count -gt 0) {
+        Write-ColorOutput "DEBUG: Sample files found:" -Type "Info"
+        $allCsvFiles | Select-Object -First 5 | ForEach-Object {
+            Write-ColorOutput "  - $($_.Name)" -Type "Info"
+        }
+    }
+
+    $csvFiles = @($allCsvFiles | Where-Object {
         $_.FullName -ne $outputPath  # Exclude output file if it exists
     })
 
     if ($csvFiles.Count -eq 0) {
-        Write-ColorOutput "No CSV files found in the specified path." -Type "Warning"
+        Write-ColorOutput "No CSV files found in the specified path: $sourcePath" -Type "Warning"
+        Write-ColorOutput "Please verify:" -Type "Warning"
+        Write-ColorOutput "  1. The path exists and is accessible" -Type "Warning"
+        Write-ColorOutput "  2. The path contains CSV files with .csv extension" -Type "Warning"
+        Write-ColorOutput "  3. You have permission to read the files" -Type "Warning"
         exit 1
     }
 
