@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-    Intune Win32 Detection Script for Eclipse IDE with ABAP Development Tools.
+    Intune Win32 Detection Script for Eclipse IDE for Java Developers with ABAP Development Tools.
 .DESCRIPTION
     This script is used as a custom detection rule in Microsoft Intune.
-    It checks whether Eclipse with ABAP Development Tools is properly installed.
+    It checks whether Eclipse with ABAP Development Tools is properly installed
+    at the location matching the documented build guide.
 
     Detection logic:
       1. Checks the Intune managed apps registry key exists and version matches.
-      2. Verifies eclipse.exe exists at the expected installation path.
+      2. Verifies eclipse.exe exists at C:\Users\Public\Eclipse\java-latest-released\eclipse.
       3. Confirms at least one SAP ADT feature is present.
 
     If ALL checks pass, the script writes output to STDOUT (indicating detected).
@@ -22,7 +23,7 @@
 
 # Must match the values in Deploy-Application.ps1
 $expectedVersion   = '2024-09'
-$eclipseInstallDir = "$env:ProgramFiles\Eclipse\eclipse-abap"
+$eclipseInstallDir = "$env:PUBLIC\Eclipse\java-latest-released\eclipse"
 $regPath           = 'HKLM:\SOFTWARE\IntuneManagedApps\Eclipse-ABAP'
 
 try {
@@ -36,7 +37,7 @@ try {
         exit
     }
 
-    # Check 2: Eclipse executable exists
+    # Check 2: Eclipse executable exists at the documented path
     $eclipseExe = Join-Path $eclipseInstallDir 'eclipse.exe'
     if (-not (Test-Path -LiteralPath $eclipseExe -PathType Leaf)) {
         exit

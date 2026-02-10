@@ -1,22 +1,30 @@
 <#
 .SYNOPSIS
-    PSAppDeployToolkit - Eclipse IDE with SAP ABAP Development Tools (ADT)
+    PSAppDeployToolkit - Eclipse IDE for Java Developers with SAP ABAP Development Tools (ADT)
 .DESCRIPTION
-    Installs Eclipse IDE for Enterprise Java Developers and the SAP ABAP Development Tools (ADT) plugin.
-    This script is designed for deployment via Microsoft Intune / SCCM using PSADT.
+    Automates the manual installation procedure for Eclipse IDE for Java Developers
+    with SAP ABAP Development Tools, matching the documented build guide.
+
+    This script replicates the following manual steps silently:
+      1. Remove any existing JRE/JDK installations
+      2. Install Eclipse Temurin JDK 21.0.9
+      3. Extract Eclipse IDE for Java Developers 2024-09
+      4. Configure eclipse.ini to use JDK 21
+      5. Install ABAP Development Tools via p2 director
+      6. Create shortcuts on Public Desktop and Start Menu
 
     Pre-requisites (place in the Files\ directory before deployment):
-      - Eclipse IDE ZIP archive (e.g., eclipse-jee-2024-09-R-win32-x86_64.zip)
-      - AdoptOpenJDK / Eclipse Temurin JDK MSI (e.g., OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi)
+      - eclipse-java-2024-09-R-win32-x86_64.zip
+      - OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi
 
-    The ABAP Development Tools (ADT) plugin is installed automatically from the SAP update site
-    after Eclipse is extracted.
+    Source files available on the SCCM share at:
+      \\gaatlnetappcifs\sccm$\Applications\Eclipse 2024 and JDK 21.09 for ABAP
 
 .NOTES
     Toolkit Version:  3.9.3
-    Application:      Eclipse IDE + SAP ABAP Development Tools (ADT)
+    Application:      Eclipse IDE for Java Developers + SAP ABAP Development Tools (ADT)
     Author:           Intune Admin
-    Date:             2026-02-09
+    Date:             2026-02-10
 #>
 
 [CmdletBinding()]
@@ -53,49 +61,50 @@ Try {
     ##* VARIABLE DECLARATION
     ##*===============================================
     [String]$appVendor       = 'Eclipse Foundation / SAP'
-    [String]$appName         = 'Eclipse IDE with ABAP Development Tools'
+    [String]$appName         = 'Eclipse IDE for Java Developers with ABAP Development Tools'
     [String]$appVersion      = '2024-09'
     [String]$appArch         = 'x64'
     [String]$appLang         = 'EN'
     [String]$appRevision     = '01'
-    [String]$appScriptVersion = '1.0.0'
-    [String]$appScriptDate   = '2026-02-09'
+    [String]$appScriptVersion = '2.0.0'
+    [String]$appScriptDate   = '2026-02-10'
     [String]$appScriptAuthor = 'Intune Admin'
 
     ##*===============================================
     ##* APPLICATION CONFIGURATION
+    ##* Paths match the documented manual build guide:
+    ##*   Eclipse root:  C:\Users\Public\Eclipse
+    ##*   Eclipse exe:   C:\Users\Public\Eclipse\java-latest-released\eclipse\eclipse.exe
+    ##*   Workspace:     C:\Users\Public\Eclipse
     ##*===============================================
 
-    # Installation paths
-    [String]$eclipseInstallDir  = "$env:ProgramFiles\Eclipse\eclipse-abap"
-    [String]$eclipseWorkspace   = "$env:PUBLIC\Documents\Eclipse-ABAP-Workspace"
+    # Installation paths - matches article: C:\Users\Public\Eclipse\java-latest-released\eclipse
+    [String]$eclipseRootDir     = "$env:PUBLIC\Eclipse"
+    [String]$eclipseInstallDir  = "$env:PUBLIC\Eclipse\java-latest-released\eclipse"
+    [String]$eclipseWorkspace   = "$env:PUBLIC\Eclipse"
     [String]$jdkInstallDir      = "$env:ProgramFiles\Eclipse Adoptium\jdk-21"
 
     # Source file names (must exist in Files\ directory)
-    [String]$eclipseZipFileName = 'eclipse-jee-2024-09-R-win32-x86_64.zip'
+    # Available at: \\gaatlnetappcifs\sccm$\Applications\Eclipse 2024 and JDK 21.09 for ABAP
+    [String]$eclipseZipFileName = 'eclipse-java-2024-09-R-win32-x86_64.zip'
     [String]$jdkMsiFileName     = 'OpenJDK21U-jdk_x64_windows_hotspot_21.0.9.msi'
 
-    # SAP ABAP Development Tools update site URL
-    [String]$adtUpdateSite      = 'https://tools.hana.ondemand.com/latest'
+    # SAP ABAP Development Tools update site URL (article uses http://)
+    [String]$adtUpdateSite      = 'http://tools.hana.ondemand.com/latest'
 
-    # ADT feature IDs to install
+    # ADT feature IDs to install (matches "ABAP Development Tools" from the article)
     [String[]]$adtFeatures = @(
         'com.sap.adt.tools.abap.feature.feature.group',
         'com.sap.adt.tools.abap.core.feature.feature.group',
         'com.sap.adt.tools.hana.devedition.feature.feature.group'
     )
 
-    # Shortcut configuration
-    [String]$shortcutName = 'Eclipse ABAP'
+    # Shortcut configuration - matches article: "Eclipse IDE for Java"
+    [String]$shortcutName = 'Eclipse IDE for Java'
 
     ##*===============================================
     ##* PSADT TOOLKIT INITIALIZATION
     ##*===============================================
-
-    ## Dot source the required App Deploy Toolkit Functions
-    ## NOTE: In a full PSADT package you would dot-source AppDeployToolkitMain.ps1 here.
-    ##       For Intune Win32 deployment, this script can run standalone with the helper
-    ##       functions below.
 
     ## Use $PSScriptRoot for reliable path resolution under Intune SYSTEM context
     $scriptDirectory = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
@@ -171,10 +180,75 @@ Try {
     ##* HELPER FUNCTIONS
     ##*===============================================
 
+    function Remove-ExistingJava {
+        <#
+        .SYNOPSIS
+            Removes any existing JRE or JDK installations.
+            Per the build guide: "Remove any other JRE or JDK that is installed before installation."
+        #>
+        Write-Host "Searching for existing Java installations to remove..."
+
+        # Remove via registry uninstall keys (covers MSI and non-MSI installs)
+        $uninstallPaths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        )
+
+        $javaProducts = foreach ($path in $uninstallPaths) {
+            Get-ItemProperty $path -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.DisplayName -and (
+                        $_.DisplayName -match 'Java\s+\d' -or
+                        $_.DisplayName -match 'Java\(TM\)' -or
+                        $_.DisplayName -match 'JDK\s' -or
+                        $_.DisplayName -match 'JRE\s' -or
+                        $_.DisplayName -match 'Eclipse Temurin' -or
+                        $_.DisplayName -match 'AdoptOpenJDK' -or
+                        $_.DisplayName -match 'Amazon Corretto' -or
+                        $_.DisplayName -match 'OpenJDK' -or
+                        $_.DisplayName -match 'Oracle JDK'
+                    )
+                }
+        }
+
+        if (-not $javaProducts) {
+            Write-Host "No existing Java installations found."
+            return
+        }
+
+        foreach ($product in $javaProducts) {
+            Write-Host "Removing: $($product.DisplayName) ($($product.DisplayVersion))"
+            $uninstallString = $product.UninstallString
+
+            if ($product.PSChildName -match '^\{.*\}$') {
+                # MSI product - uninstall via msiexec
+                $msiGuid = $product.PSChildName
+                $uninstallProcess = Start-Process -FilePath 'msiexec.exe' `
+                    -ArgumentList "/x `"$msiGuid`" /qn /norestart" `
+                    -Wait -PassThru
+                Write-Host "  MSI uninstall exit code: $($uninstallProcess.ExitCode)"
+            }
+            elseif ($uninstallString) {
+                # EXE-based uninstall
+                if ($product.QuietUninstallString) {
+                    $quietCmd = $product.QuietUninstallString
+                }
+                else {
+                    $quietCmd = "$uninstallString /s"
+                }
+                Write-Host "  Running: $quietCmd"
+                Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $quietCmd" -Wait -NoNewWindow
+            }
+        }
+
+        Write-Host "Existing Java removal complete."
+    }
+
     function Install-EclipsePlugin {
         <#
         .SYNOPSIS
             Installs an Eclipse plugin from an update site using the p2 director.
+            Replicates: Help > Install New Software > http://tools.hana.ondemand.com/latest
         #>
         param(
             [Parameter(Mandatory)]
@@ -244,10 +318,10 @@ Try {
     ##*===============================================
     If ($DeploymentType -ieq 'Install') {
 
-        ## Show Welcome Message, close Eclipse if running, allow up to 3 deferrals
+        ## Show Welcome Message, close Eclipse if running
         Show-InstallationWelcome -CloseApps 'eclipse' -CloseAppsCountdown -PersistPrompt 0
 
-        Show-InstallationProgress -StatusMessage "Preparing to install Eclipse IDE with ABAP Development Tools..."
+        Show-InstallationProgress -StatusMessage "Preparing to install Eclipse IDE for Java Developers with ABAP Development Tools..."
 
         ## Validate source files exist
         $eclipseZipPath = Join-Path $dirFiles $eclipseZipFileName
@@ -256,6 +330,7 @@ Try {
         if (-not (Test-Path -LiteralPath $eclipseZipPath)) {
             Write-Warning "Eclipse ZIP not found at: $eclipseZipPath"
             Write-Warning "Please place '$eclipseZipFileName' in the Files\ directory."
+            Write-Warning "Source: \\gaatlnetappcifs\sccm`$\Applications\Eclipse 2024 and JDK 21.09 for ABAP"
             Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69001
         }
@@ -263,6 +338,7 @@ Try {
         if (-not (Test-Path -LiteralPath $jdkMsiPath)) {
             Write-Warning "JDK MSI not found at: $jdkMsiPath"
             Write-Warning "Please place '$jdkMsiFileName' in the Files\ directory."
+            Write-Warning "Source: \\gaatlnetappcifs\sccm`$\Applications\Eclipse 2024 and JDK 21.09 for ABAP"
             Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69002
         }
@@ -271,9 +347,16 @@ Try {
     ##* INSTALLATION
     ##*===============================================
 
-        ## ---- Step 1: Install JDK (Eclipse Temurin / AdoptOpenJDK 21) ----
-        Show-InstallationProgress -StatusMessage "Installing Eclipse Temurin JDK 21..."
-        Write-Host "--- Step 1/4: Installing JDK ---"
+        ## ---- Step 1: Remove existing JRE/JDK ----
+        ## Per build guide: "Remove any other JRE or JDK that is installed before installation."
+        Show-InstallationProgress -StatusMessage "Removing existing Java installations..."
+        Write-Host "--- Step 1/5: Removing existing JRE/JDK ---"
+
+        Remove-ExistingJava
+
+        ## ---- Step 2: Install JDK (Eclipse Temurin 21.0.9) ----
+        Show-InstallationProgress -StatusMessage "Installing Eclipse Temurin JDK 21.0.9..."
+        Write-Host "--- Step 2/5: Installing JDK 21.0.9 ---"
 
         $jdkExitCode = Execute-MSI -Action 'Install' -Path $jdkMsiFileName -Parameters "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome INSTALLDIR=`"$jdkInstallDir`""
 
@@ -287,14 +370,24 @@ Try {
         $env:JAVA_HOME = $jdkInstallDir
         $env:PATH = "$jdkInstallDir\bin;$env:PATH"
 
-        ## ---- Step 2: Extract Eclipse IDE ----
-        Show-InstallationProgress -StatusMessage "Extracting Eclipse IDE..."
-        Write-Host "--- Step 2/4: Extracting Eclipse IDE ---"
+        ## ---- Step 3: Extract Eclipse IDE for Java Developers ----
+        ## Replicates the Eclipse Installer "Advanced Mode" workflow:
+        ##   - Bundle pool at C:\Users\Public\Eclipse
+        ##   - Root install folder: C:\Users\Public\Eclipse
+        ##   - Installation folder name: java-latest-released
+        ##   - Final path: C:\Users\Public\Eclipse\java-latest-released\eclipse
+        Show-InstallationProgress -StatusMessage "Extracting Eclipse IDE for Java Developers 2024-09..."
+        Write-Host "--- Step 3/5: Extracting Eclipse IDE ---"
 
-        # Create the parent install directory
-        $eclipseParent = Split-Path $eclipseInstallDir -Parent
-        if (-not (Test-Path $eclipseParent)) {
-            New-Item -Path $eclipseParent -ItemType Directory -Force | Out-Null
+        # Create the root Eclipse directory at C:\Users\Public\Eclipse
+        if (-not (Test-Path $eclipseRootDir)) {
+            New-Item -Path $eclipseRootDir -ItemType Directory -Force | Out-Null
+        }
+
+        # Create the java-latest-released parent directory
+        $eclipseProductDir = Split-Path $eclipseInstallDir -Parent
+        if (-not (Test-Path $eclipseProductDir)) {
+            New-Item -Path $eclipseProductDir -ItemType Directory -Force | Out-Null
         }
 
         # Remove previous installation if present
@@ -303,18 +396,17 @@ Try {
             Remove-Item -Path $eclipseInstallDir -Recurse -Force
         }
 
-        # Extract Eclipse ZIP to a temporary location, then rename
+        # Extract Eclipse ZIP to a temporary location, then move into place
         $tempExtract = Join-Path $env:TEMP "eclipse_extract_$(Get-Date -Format 'yyyyMMddHHmmss')"
         Write-Host "Extracting to temporary location: $tempExtract"
         Expand-Archive -Path $eclipseZipPath -DestinationPath $tempExtract -Force
 
-        # The ZIP typically contains a root 'eclipse' folder
+        # The ZIP contains a root 'eclipse' folder - move it to the target path
         $extractedEclipse = Join-Path $tempExtract 'eclipse'
         if (Test-Path $extractedEclipse) {
             Move-Item -Path $extractedEclipse -Destination $eclipseInstallDir -Force
         }
         else {
-            # If there's no sub-folder, move contents directly
             Move-Item -Path $tempExtract -Destination $eclipseInstallDir -Force
         }
 
@@ -332,9 +424,9 @@ Try {
 
         Write-Host "Eclipse IDE extracted successfully to: $eclipseInstallDir"
 
-        ## ---- Step 3: Configure eclipse.ini for JDK ----
-        Show-InstallationProgress -StatusMessage "Configuring Eclipse to use installed JDK..."
-        Write-Host "--- Step 3/4: Configuring eclipse.ini ---"
+        ## ---- Step 4: Configure eclipse.ini for JDK 21 ----
+        Show-InstallationProgress -StatusMessage "Configuring Eclipse to use JDK 21.0.9..."
+        Write-Host "--- Step 4/5: Configuring eclipse.ini ---"
 
         $eclipseIniPath = Join-Path $eclipseInstallDir 'eclipse.ini'
         if (Test-Path $eclipseIniPath) {
@@ -359,9 +451,11 @@ Try {
             Write-Host "eclipse.ini memory settings updated (Xms=512m, Xmx=2048m)"
         }
 
-        ## ---- Step 4: Install SAP ABAP Development Tools (ADT) via p2 Director ----
+        ## ---- Step 5: Install SAP ABAP Development Tools (ADT) via p2 Director ----
+        ## Replicates: Help > Install New Software > http://tools.hana.ondemand.com/latest
+        ##             Check "ABAP Development Tools" > Next > Accept license > Finish
         Show-InstallationProgress -StatusMessage "Installing SAP ABAP Development Tools (ADT) plugin..."
-        Write-Host "--- Step 4/4: Installing ABAP Development Tools ---"
+        Write-Host "--- Step 5/5: Installing ABAP Development Tools ---"
 
         $adtExitCode = Install-EclipsePlugin -EclipsePath $eclipseInstallDir `
             -Repository $adtUpdateSite `
@@ -369,7 +463,7 @@ Try {
 
         if ($adtExitCode -ne 0) {
             Write-Warning "ADT plugin installation returned exit code: $adtExitCode"
-            Write-Warning "ADT may need to be installed manually via Eclipse Marketplace."
+            Write-Warning "ADT may need to be installed manually via Help > Install New Software."
             # Non-fatal - Eclipse is still usable, ADT can be added later
         }
 
@@ -379,36 +473,34 @@ Try {
 
         Show-InstallationProgress -StatusMessage "Finalizing installation..."
 
-        ## Create default workspace directory
-        if (-not (Test-Path $eclipseWorkspace)) {
-            New-Item -Path $eclipseWorkspace -ItemType Directory -Force | Out-Null
-            Write-Host "Created default workspace: $eclipseWorkspace"
-        }
+        ## Create Desktop shortcut at C:\Users\Public\Desktop (Public Desktop)
+        ## Per article: Right-click eclipse > Send To > Desktop, rename to "Eclipse IDE for Java",
+        ##              then move to C:\Users\Public\Public Desktop
+        $eclipseExe = Join-Path $eclipseInstallDir 'eclipse.exe'
+        $desktopShortcut = Join-Path "$env:PUBLIC\Desktop" "$shortcutName.lnk"
 
-        ## Create Start Menu shortcut
+        New-Shortcut -Path $desktopShortcut `
+            -TargetPath $eclipseExe `
+            -Arguments "-data `"$eclipseWorkspace`"" `
+            -IconLocation "$eclipseExe,0" `
+            -Description 'Eclipse IDE for Java Developers with SAP ABAP Development Tools' `
+            -WorkingDirectory $eclipseInstallDir
+
+        Write-Host "Public Desktop shortcut created: $desktopShortcut"
+
+        ## Create Start Menu shortcut at C:\ProgramData\Microsoft\Windows\Start Menu\Programs
+        ## Per article: Copy shortcut to Start Menu Programs for all users
         $startMenuPath = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs"
         $shortcutPath  = Join-Path $startMenuPath "$shortcutName.lnk"
-        $eclipseExe    = Join-Path $eclipseInstallDir 'eclipse.exe'
 
         New-Shortcut -Path $shortcutPath `
             -TargetPath $eclipseExe `
             -Arguments "-data `"$eclipseWorkspace`"" `
             -IconLocation "$eclipseExe,0" `
-            -Description 'Eclipse IDE with SAP ABAP Development Tools' `
+            -Description 'Eclipse IDE for Java Developers with SAP ABAP Development Tools' `
             -WorkingDirectory $eclipseInstallDir
 
         Write-Host "Start Menu shortcut created: $shortcutPath"
-
-        ## Create Desktop shortcut
-        $desktopShortcut = Join-Path "$env:PUBLIC\Desktop" "$shortcutName.lnk"
-        New-Shortcut -Path $desktopShortcut `
-            -TargetPath $eclipseExe `
-            -Arguments "-data `"$eclipseWorkspace`"" `
-            -IconLocation "$eclipseExe,0" `
-            -Description 'Eclipse IDE with SAP ABAP Development Tools' `
-            -WorkingDirectory $eclipseInstallDir
-
-        Write-Host "Desktop shortcut created: $desktopShortcut"
 
         ## Write Intune detection registry key
         $regPath = 'HKLM:\SOFTWARE\IntuneManagedApps\Eclipse-ABAP'
@@ -420,7 +512,9 @@ Try {
         Write-Host "Intune detection registry key created at: $regPath"
 
         Show-InstallationProgress -StatusMessage "Installation complete!"
-        Write-Host "=== Eclipse IDE with ABAP Development Tools installed successfully ==="
+        Write-Host "=== Eclipse IDE for Java Developers with ABAP Development Tools installed successfully ==="
+        Write-Host "Eclipse location: $eclipseInstallDir"
+        Write-Host "Workspace: $eclipseWorkspace"
         Stop-Transcript -ErrorAction SilentlyContinue
         Exit 0
     }
@@ -431,18 +525,12 @@ Try {
     ElseIf ($DeploymentType -ieq 'Uninstall') {
 
         Show-InstallationWelcome -CloseApps 'eclipse' -CloseAppsCountdown -PersistPrompt 0
-        Show-InstallationProgress -StatusMessage "Uninstalling Eclipse IDE with ABAP Development Tools..."
+        Show-InstallationProgress -StatusMessage "Uninstalling Eclipse IDE for Java Developers with ABAP Development Tools..."
 
-        ## Remove Eclipse installation directory
-        if (Test-Path $eclipseInstallDir) {
-            Write-Host "Removing Eclipse installation: $eclipseInstallDir"
-            Remove-Item -Path $eclipseInstallDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-
-        ## Remove the parent Eclipse folder if empty
-        $eclipseParent = Split-Path $eclipseInstallDir -Parent
-        if ((Test-Path $eclipseParent) -and -not (Get-ChildItem $eclipseParent -Force)) {
-            Remove-Item -Path $eclipseParent -Force -ErrorAction SilentlyContinue
+        ## Remove Eclipse root directory (C:\Users\Public\Eclipse and everything underneath)
+        if (Test-Path $eclipseRootDir) {
+            Write-Host "Removing Eclipse installation: $eclipseRootDir"
+            Remove-Item -Path $eclipseRootDir -Recurse -Force -ErrorAction SilentlyContinue
         }
 
         ## Remove shortcuts
@@ -452,8 +540,8 @@ Try {
         if (Test-Path $startMenuShortcut) { Remove-Item $startMenuShortcut -Force }
         if (Test-Path $desktopShortcut)   { Remove-Item $desktopShortcut -Force }
 
-        ## Uninstall JDK (optional - comment out if JDK is shared with other apps)
-        Write-Host "Uninstalling Eclipse Temurin JDK..."
+        ## Uninstall JDK (comment out if JDK is shared with other apps)
+        Write-Host "Uninstalling Eclipse Temurin JDK 21.0.9..."
         Execute-MSI -Action 'Uninstall' -Path $jdkMsiFileName
 
         ## Remove Intune detection registry key
@@ -463,12 +551,7 @@ Try {
             Write-Host "Intune detection registry key removed."
         }
 
-        ## Remove workspace (optional - uncomment to clean workspace on uninstall)
-        # if (Test-Path $eclipseWorkspace) {
-        #     Remove-Item -Path $eclipseWorkspace -Recurse -Force
-        # }
-
-        Write-Host "=== Eclipse IDE with ABAP Development Tools uninstalled ==="
+        Write-Host "=== Eclipse IDE for Java Developers with ABAP Development Tools uninstalled ==="
         Stop-Transcript -ErrorAction SilentlyContinue
         Exit 0
     }
@@ -488,7 +571,7 @@ Try {
             Write-Host "Repair complete. ADT plugin reinstallation exit code: $adtExitCode"
         }
         else {
-            Write-Warning "Eclipse not found. Run a full install instead of repair."
+            Write-Warning "Eclipse not found at $eclipseInstallDir. Run a full install instead of repair."
             Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69010
         }
