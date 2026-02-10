@@ -27,7 +27,7 @@ Param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Interactive', 'Silent', 'NonInteractive')]
-    [String]$DeployMode = 'Interactive',
+    [String]$DeployMode = 'Silent',
 
     [Parameter(Mandatory = $false)]
     [switch]$AllowRebootPassThru = $false,
@@ -42,6 +42,12 @@ Param (
 Try {
     ## Set the script execution policy for this process
     Try { Set-ExecutionPolicy -ExecutionPolicy 'ByPass' -Scope 'Process' -Force -ErrorAction 'Stop' } Catch {}
+
+    ## Start transcript for Intune Management Extension logging
+    $logDir = Join-Path $env:ProgramData 'Eclipse-ABAP-Install'
+    if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+    $transcriptPath = Join-Path $logDir "Deploy-EclipseABAP_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    Start-Transcript -Path $transcriptPath -Force -ErrorAction SilentlyContinue
 
     ##*===============================================
     ##* VARIABLE DECLARATION
@@ -91,7 +97,8 @@ Try {
     ##       For Intune Win32 deployment, this script can run standalone with the helper
     ##       functions below.
 
-    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Definition
+    ## Use $PSScriptRoot for reliable path resolution under Intune SYSTEM context
+    $scriptDirectory = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
     $toolkitMainScript = Join-Path $scriptDirectory 'AppDeployToolkit\AppDeployToolkitMain.ps1'
 
     If (Test-Path -LiteralPath $toolkitMainScript -PathType 'Leaf') {
@@ -120,13 +127,13 @@ Try {
             $logPath = Join-Path $env:TEMP ("msi_" + [System.IO.Path]::GetFileNameWithoutExtension($Path) + ".log")
 
             if ($Action -eq 'Install') {
-                $args = "/i `"$msiPath`" /qn /norestart /l*v `"$logPath`" $Parameters"
+                $msiArgs = "/i `"$msiPath`" /qn /norestart /l*v `"$logPath`" $Parameters"
             }
             elseif ($Action -eq 'Uninstall') {
-                $args = "/x `"$msiPath`" /qn /norestart /l*v `"$logPath`" $Parameters"
+                $msiArgs = "/x `"$msiPath`" /qn /norestart /l*v `"$logPath`" $Parameters"
             }
-            Write-Host "Running: msiexec.exe $args"
-            $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -Wait -PassThru
+            Write-Host "Running: msiexec.exe $msiArgs"
+            $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $msiArgs -Wait -PassThru
             return $process.ExitCode
         }
 
@@ -183,11 +190,17 @@ Try {
         $eclipseExe = Join-Path $EclipsePath 'eclipse.exe'
         $iuList = $InstallIUs -join ','
 
+        # Create a temp p2 data directory so the SYSTEM account doesn't fail
+        # trying to write to C:\Windows\system32\config\systemprofile
+        $p2DataDir = Join-Path $env:TEMP "eclipse_p2_data_$(Get-Date -Format 'yyyyMMddHHmmss')"
+        New-Item -Path $p2DataDir -ItemType Directory -Force | Out-Null
+
         $arguments = @(
             '-application', 'org.eclipse.equinox.p2.director',
             '-repository', $Repository,
             '-installIU', $iuList,
             '-destination', $EclipsePath,
+            '-data', $p2DataDir,
             '-nosplash'
         )
 
@@ -207,6 +220,11 @@ Try {
         }
         else {
             Write-Host "Eclipse plugins installed successfully."
+        }
+
+        # Clean up temp p2 data directory
+        if (Test-Path $p2DataDir) {
+            Remove-Item -Path $p2DataDir -Recurse -Force -ErrorAction SilentlyContinue
         }
 
         return $process.ExitCode
@@ -238,12 +256,14 @@ Try {
         if (-not (Test-Path -LiteralPath $eclipseZipPath)) {
             Write-Warning "Eclipse ZIP not found at: $eclipseZipPath"
             Write-Warning "Please place '$eclipseZipFileName' in the Files\ directory."
+            Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69001
         }
 
         if (-not (Test-Path -LiteralPath $jdkMsiPath)) {
             Write-Warning "JDK MSI not found at: $jdkMsiPath"
             Write-Warning "Please place '$jdkMsiFileName' in the Files\ directory."
+            Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69002
         }
 
@@ -259,6 +279,7 @@ Try {
 
         if ($jdkExitCode -ne 0 -and $jdkExitCode -ne 3010) {
             Write-Warning "JDK installation failed with exit code: $jdkExitCode"
+            Stop-Transcript -ErrorAction SilentlyContinue
             Exit $jdkExitCode
         }
 
@@ -305,6 +326,7 @@ Try {
         # Verify extraction
         if (-not (Test-EclipseInstalled)) {
             Write-Warning "Eclipse extraction failed - eclipse.exe not found in $eclipseInstallDir"
+            Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69003
         }
 
@@ -399,6 +421,8 @@ Try {
 
         Show-InstallationProgress -StatusMessage "Installation complete!"
         Write-Host "=== Eclipse IDE with ABAP Development Tools installed successfully ==="
+        Stop-Transcript -ErrorAction SilentlyContinue
+        Exit 0
     }
 
     ##*===============================================
@@ -445,6 +469,8 @@ Try {
         # }
 
         Write-Host "=== Eclipse IDE with ABAP Development Tools uninstalled ==="
+        Stop-Transcript -ErrorAction SilentlyContinue
+        Exit 0
     }
 
     ##*===============================================
@@ -463,12 +489,16 @@ Try {
         }
         else {
             Write-Warning "Eclipse not found. Run a full install instead of repair."
+            Stop-Transcript -ErrorAction SilentlyContinue
             Exit 69010
         }
+        Stop-Transcript -ErrorAction SilentlyContinue
+        Exit 0
     }
 }
 Catch {
     Write-Error "An error occurred: $($_.Exception.Message)"
     Write-Error $_.ScriptStackTrace
+    Stop-Transcript -ErrorAction SilentlyContinue
     Exit 69999
 }
