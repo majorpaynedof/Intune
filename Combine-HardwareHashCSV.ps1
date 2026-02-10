@@ -200,9 +200,9 @@ try {
         $searchParams.Add("Recurse", $true)
     }
 
-    $csvFiles = Get-ChildItem @searchParams | Where-Object {
+    $csvFiles = @(Get-ChildItem @searchParams | Where-Object {
         $_.FullName -ne $outputPath  # Exclude output file if it exists
-    }
+    })
 
     if ($csvFiles.Count -eq 0) {
         Write-ColorOutput "No CSV files found in the specified path." -Type "Warning"
