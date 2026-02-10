@@ -49,8 +49,8 @@
     Recursively finds all CSV files and removes duplicates.
 
 .NOTES
-    Author: Claude
-    Date: 2026-01-07
+    Author: Joseph Martin
+    Date: 2026-02-10
     Version: 1.0
 #>
 
